@@ -317,6 +317,9 @@ class UnaryUfuncInfo(OpInfo):
                  dtypesIfCPU=floating_and_complex_types_and(torch.bfloat16),
                  dtypesIfCUDA=floating_and_complex_types_and(torch.half),
                  dtypesIfROCM=floating_types_and(torch.half),
+                 default_test_dtypes=(
+                     torch.uint8, torch.long, torch.half, torch.bfloat16,
+                     torch.float32, torch.cfloat),  # dtypes which most tests run in
                  domain=(None, None),  # the [low, high) domain of the function
                  handles_large_floats=True,  # whether the op correctly handles large float values (like 1e20)
                  handles_extremals=True,  # whether the op correctly handles extremal values (like inf)
@@ -330,6 +333,7 @@ class UnaryUfuncInfo(OpInfo):
                                              dtypesIfCPU=dtypesIfCPU,
                                              dtypesIfCUDA=dtypesIfCUDA,
                                              dtypesIfROCM=dtypesIfROCM,
+                                             default_test_dtypes=default_test_dtypes,
                                              sample_inputs_func=sample_inputs_func,
                                              supports_sparse=supports_sparse,
                                              **kwargs)
@@ -1486,19 +1490,11 @@ op_db: List[OpInfo] = [
                        # Reference: https://github.com/pytorch/pytorch/issues/49224
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_normal',
                                 dtypes=[torch.int8], active_if=TEST_WITH_ASAN),
-                       SkipInfo('TestUnaryUfuncs', 'test_variant_consistency',
-                                dtypes=[torch.cfloat, torch.cdouble]),
                        # TODO: Fix test_out_arg_all_dtypes as torch.empty_like(expected_output) where expected_output=op(input)
                        # We can break the logic of the loop over all possible types but it is OK.
                        # https://github.com/pytorch/pytorch/blob/master/test/test_unary_ufuncs.py#L440-L449
                        SkipInfo('TestUnaryUfuncs', 'test_out_arg_all_dtypes',
                                 dtypes=[torch.cfloat, torch.cdouble]),
-                       SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                                dtypes=[torch.cfloat, torch.cdouble]),
-                       SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                dtypes=[torch.cfloat, torch.cdouble, torch.bfloat16]),
-                       SkipInfo('TestCommon', 'test_jit_alias_remapping',
-                                dtypes=[torch.cfloat, torch.cdouble, torch.bfloat16]),
                    ),
                    test_inplace_grad=False,
                    assert_autodiffed=True),
@@ -1511,7 +1507,6 @@ op_db: List[OpInfo] = [
                    dtypes=all_types_and_complex_and(torch.bool),
                    dtypesIfCPU=all_types_and_complex_and(torch.bool, torch.bfloat16),
                    dtypesIfCUDA=all_types_and_complex_and(torch.bool, torch.half),
-                   default_test_dtypes=[torch.long, torch.half, torch.bfloat16, torch.float32, torch.cfloat],
                    skip_bfloat16_grad=True,
                    assert_autodiffed=True,
                    decorators=(precisionOverride({torch.float16: 1e-2,
@@ -1540,9 +1535,6 @@ op_db: List[OpInfo] = [
                    decorators=(precisionOverride({torch.bfloat16: 5e-2}),),
                    test_inplace_grad=False,
                    skips=(
-                       # RuntimeError: "rsqrt_cuda" not implemented for 'BFloat16'
-                       SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                device_type='cuda', dtypes=[torch.bfloat16]),
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_extremal',
                                 device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_hard',
@@ -1572,8 +1564,6 @@ op_db: List[OpInfo] = [
            assert_autodiffed=True,
            autodiff_nonfusible_nodes=['aten::add', 'aten::mm'],
            skips=(
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.bfloat16, torch.float16, torch.cfloat, torch.cdouble]),
                SkipInfo('TestOpInfo', 'test_duplicate_method_tests'),
                # addmm does not correctly warn when resizing out= inputs
                SkipInfo('TestCommon', 'test_out')),
@@ -1583,8 +1573,6 @@ op_db: List[OpInfo] = [
            # Reference: https://github.com/pytorch/pytorch/issues/50747
            test_inplace_grad=False,
            skips=(
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.float16, torch.cfloat, torch.cdouble, torch.bfloat16]),
                # Reference: https://github.com/pytorch/pytorch/issues/50747
                SkipInfo('TestCommon', 'test_variant_consistency_eager',
                         dtypes=all_types_and_complex_and(torch.bool, torch.bfloat16, torch.float16)),),
@@ -1598,10 +1586,7 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_amax_amin,
            skips=(
                # amax does not correctly warn when resizing out= inputs
-               SkipInfo('TestCommon', 'test_out'),
-               # Reference: https://github.com/pytorch/pytorch/issues/48978
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.bfloat16]),)),
+               SkipInfo('TestCommon', 'test_out'),)),
     OpInfo('amin',
            op=torch.amin,
            dtypes=all_types_and(torch.float16, torch.bfloat16, torch.bool),
@@ -1611,10 +1596,7 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_amax_amin,
            skips=(
                # amin does not correctly warn when resizing out= inputs
-               SkipInfo('TestCommon', 'test_out'),
-               # Reference: https://github.com/pytorch/pytorch/issues/48978
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.bfloat16]),)),
+               SkipInfo('TestCommon', 'test_out'),)),
     UnaryUfuncInfo('asin',
                    aliases=('arcsin', ),
                    ref=np.arcsin,
@@ -1650,9 +1632,6 @@ op_db: List[OpInfo] = [
                    decorators=(precisionOverride({torch.bfloat16: 5e-2}),),
                    test_inplace_grad=False,
                    skips=(
-                       # RuntimeError: "rsqrt_cuda" not implemented for 'BFloat16'
-                       SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                device_type='cuda', dtypes=[torch.bfloat16]),
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_extremal',
                                 device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_hard',
@@ -1755,8 +1734,6 @@ op_db: List[OpInfo] = [
                      check_batched_gradgrad=False,
                      decorators=[skipCUDAIfNoMagma, skipCPUIfNoLapack],
                      skips=(
-                         SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                                  dtypes=[torch.complex64, torch.complex128]),
                          # cholesky_inverse does not correctly warn when resizing out= inputs
                          SkipInfo('TestCommon', 'test_out'),)),
     UnaryUfuncInfo('clamp',
@@ -1826,36 +1803,11 @@ op_db: List[OpInfo] = [
                                 dtypes=[torch.cfloat, torch.cdouble], active_if=IS_MACOS),
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_hard', device_type='cpu',
                                 dtypes=[torch.cfloat, torch.cdouble], active_if=IS_MACOS),
-                       SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                device_type='cuda', dtypes=[torch.float16]),
                    )),
     OpInfo('cumsum',
            dtypesIfCPU=all_types_and_complex_and(torch.bool),
            dtypesIfCUDA=all_types_and_complex_and(torch.bool, torch.half),
            skips=(
-               # Reference: https://github.com/pytorch/pytorch/issues/53360
-               # For integer inputs,
-               # inplace variant preserves dtype of `self` while method variant
-               # always promotes it to torch.long.
-               # >>> t = torch.randint(2, 10, (3, 2), dtype=torch.int8)
-               # >>> t.cumsum(0).dtype
-               # torch.int64
-               # >>> t.cumsum_(0).dtype
-               # torch.int8
-               SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                        dtypes=[torch.uint8, torch.int8, torch.int16, torch.int32]),
-               # Reference: https://github.com/pytorch/pytorch/issues/53358
-               # >>> t = torch.tensor([False])
-               # >>> t.cumsum_(0) # Error "cumsum_out_cpu" not implemented for 'Bool'
-               # >>> t.cuda().cumsum_(0) # Error "cumsum_cuda" not implemented for 'Bool'
-               # >>> t = torch.tensor(False)
-               # >>> t.cumsum_(0) # Error "cumsum_out_cpu" not implemented for 'Bool'
-               # >>> t.cuda().cumsum_(0) # Does not fail!
-               # tensor(False, device='cuda:0')
-               SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                        dtypes=[torch.bool]),
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.bool]),
                # cumsum does not correctly warn when resizing out= inputs
                SkipInfo('TestCommon', 'test_out'),
                SkipInfo('TestOpInfo', 'test_duplicate_method_tests'),
@@ -2112,12 +2064,8 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_linalg_lstsq,
            check_batched_grad=False,
            check_batched_gradgrad=False,
-           decorators=[skipCUDAIfNoMagma, skipCPUIfNoLapack],
-           skips=(
-               # skip because `linalg_lstsq` is not differentiable
-               SkipInfo('TestGradients', 'test_fn_grad'),
-               SkipInfo('TestCommon', 'test_variant_consistency_jit'),
-           )),
+           supports_autograd=False,
+           decorators=[skipCUDAIfNoMagma, skipCPUIfNoLapack]),
     OpInfo('linalg.norm',
            op=torch.linalg.norm,
            dtypes=floating_and_complex_types_and(torch.float16, torch.bfloat16),
@@ -2126,12 +2074,6 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_linalg_norm,
            aten_name='linalg_norm',
            skips=(
-               # TODO: remove this once `pow` is implemented for float16
-               #       and bfloat16 on CPU. Issue:
-               #       https://github.com/pytorch/pytorch/issues/50789
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        device_type='cpu',
-                        dtypes=[torch.float16, torch.bfloat16]),
                # linalg.norm does not correctly warn when resizing out= inputs
                SkipInfo('TestCommon', 'test_out'),
            )),
@@ -2220,17 +2162,6 @@ op_db: List[OpInfo] = [
                    safe_casts_outputs=True,
                    supports_autograd=False,
                    skips=(
-                       # The function variant always returns BoolTensor
-                       # while the inplace variant preserves the input dtype.
-                       # >>> t = torch.randn(3)
-                       # >>> torch.logical_not(t)
-                       # tensor([False, False, False])
-                       # >>> torch.logical_not(t).dtype
-                       # torch.bool
-                       # >>> t.logical_not_().dtype
-                       # torch.float32
-                       SkipInfo('TestUnaryUfuncs', 'test_variant_consistency',
-                                dtypes=all_types_and_complex_and(torch.half, torch.bfloat16)),
                        SkipInfo('TestCommon', 'test_variant_consistency_eager',
                                 dtypes=all_types_and_complex_and(torch.half, torch.bfloat16)),
                    )),
@@ -2249,8 +2180,6 @@ op_db: List[OpInfo] = [
                         device_type='cuda', dtypes=[torch.complex128]),
                SkipInfo('TestGradients', 'test_inplace_gradgrad',
                         device_type='cuda', dtypes=[torch.complex128]),
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        dtypes=[torch.cfloat, torch.cdouble]),
                SkipInfo('TestOpInfo', 'test_duplicate_method_tests'),
            ),
            supports_out=False),
@@ -2284,10 +2213,7 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_max_min_reduction_with_dim,
            skips=(
                # max does not correctly warn when resizing out= inputs
-               SkipInfo('TestCommon', 'test_out'),
-               # Reference: https://github.com/pytorch/pytorch/issues/51788#issuecomment-777625293
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        device_type='cpu', dtypes=[torch.bfloat16]),)),
+               SkipInfo('TestCommon', 'test_out'),)),
     OpInfo('max',
            op=torch.max,
            variant_test_name='reduction_no_dim',
@@ -2316,10 +2242,7 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_max_min_reduction_with_dim,
            skips=(
                # min does not correctly warn when resizing out= inputs
-               SkipInfo('TestCommon', 'test_out'),
-               # Reference: https://github.com/pytorch/pytorch/issues/51788#issuecomment-777625293
-               SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                        device_type='cpu', dtypes=[torch.bfloat16]),)),
+               SkipInfo('TestCommon', 'test_out'),)),
     OpInfo('min',
            op=torch.min,
            variant_test_name='reduction_no_dim',
@@ -2415,8 +2338,6 @@ op_db: List[OpInfo] = [
                        # Reference: https://github.com/pytorch/pytorch/issues/48641
                        SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_hard',
                                 device_type='cpu', dtypes=[torch.int8]),
-                       SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                device_type='cuda', dtypes=[torch.float16]),
                    )),
     UnaryUfuncInfo('signbit',
                    ref=np.signbit,
@@ -2742,12 +2663,8 @@ op_db: List[OpInfo] = [
            dtypes=all_types_and_complex_and(torch.bool, torch.float16, torch.bfloat16),
            test_inplace_grad=False,
            skips=(
-               # https://github.com/pytorch/pytorch/issues/49707
-               SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                        dtypes=[torch.float16, torch.bfloat16]),
-               SkipInfo('TestCommon', 'test_variant_consistency_jit', dtypes=[torch.float16, torch.bfloat16]),
                # index_select does not correctly warn when resizing out= inputs
-               SkipInfo('TestCommon', 'test_out')
+               SkipInfo('TestCommon', 'test_out'),
            ),
            sample_inputs_func=sample_inputs_index_select),
     OpInfo('sort',
@@ -2846,8 +2763,7 @@ op_db: List[OpInfo] = [
            # var has only partial support for complex and half (#51127)
            skips=(SkipInfo('TestOpInfo', 'test_unsupported_dtypes',
                            dtypes=[torch.half, torch.complex64, torch.complex128]),),
-           assert_autodiffed=True,
-           ),
+           assert_autodiffed=True),
 ]
 
 if TEST_SCIPY:
@@ -2891,12 +2807,7 @@ if TEST_SCIPY:
                            SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_hard',
                                     device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
                            SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_normal',
-                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-                           # RuntimeError: sigmoid does not support automatic differentiation for outputs with complex dtype.
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    dtypes=[torch.complex64, torch.complex128]),
-                           SkipInfo('TestCommon', 'test_variant_consistency_eager',
-                                    dtypes=[torch.complex64, torch.complex128]),),
+                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),),
                        dtypes=all_types_and_complex_and(torch.bool, torch.bfloat16),
                        dtypesIfCPU=all_types_and_complex_and(torch.bool, torch.bfloat16),
                        dtypesIfCUDA=all_types_and(torch.bool, torch.half, torch.bfloat16),
@@ -2909,12 +2820,6 @@ if TEST_SCIPY:
                        dtypes=all_types_and(torch.bool),
                        dtypesIfCPU=all_types_and(torch.bool),
                        dtypesIfCUDA=all_types_and(torch.bool, torch.half),
-                       skips=(
-                           # In some cases, output is NaN (for input close to
-                           # negative integers) especially due to reduced precision
-                           # in float16 and NaN's can't be tested for equality.
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    device_type='cuda', dtypes=[torch.float16]),),
                        safe_casts_outputs=True),
         UnaryUfuncInfo('erf',
                        ref=scipy.special.erf,
@@ -2923,10 +2828,6 @@ if TEST_SCIPY:
                        dtypes=all_types_and(torch.bool),
                        dtypesIfCPU=all_types_and(torch.bool, torch.bfloat16),
                        dtypesIfCUDA=all_types_and(torch.bool, torch.half, torch.bfloat16),
-                       skips=(
-                           # RuntimeError: "pow" not implemented for 'BFloat16'
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    dtypes=[torch.bfloat16]),),
                        assert_autodiffed=True,
                        safe_casts_outputs=True),
         UnaryUfuncInfo('erfc',
@@ -2936,10 +2837,6 @@ if TEST_SCIPY:
                        dtypes=all_types_and(torch.bool),
                        dtypesIfCPU=all_types_and(torch.bool, torch.bfloat16),
                        dtypesIfCUDA=all_types_and(torch.bool, torch.half),
-                       skips=(
-                           # RuntimeError: "pow" not implemented for 'BFloat16'
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    dtypes=[torch.bfloat16]),),
                        assert_autodiffed=True,
                        safe_casts_outputs=True),
         UnaryUfuncInfo('erfinv',
@@ -2960,11 +2857,7 @@ if TEST_SCIPY:
                                     active_if=LooseVersion(scipy.__version__) < "1.4.0"),
                            SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_normal',
                                     active_if=LooseVersion(scipy.__version__) < "1.4.0"),
-                           # RuntimeError: "pow" not implemented for 'BFloat16'
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    dtypes=[torch.bfloat16]),
-                       )
-                       ),
+                       )),
         UnaryUfuncInfo('lgamma',
                        ref=reference_lgamma,
                        aliases=('special.gammaln', ),
@@ -2987,12 +2880,6 @@ if TEST_SCIPY:
                                     dtypes=[torch.float32, torch.float64], active_if=IS_WINDOWS),
                            SkipInfo('TestUnaryUfuncs', 'test_reference_numerics_normal',
                                     dtypes=[torch.float32, torch.float64], active_if=IS_WINDOWS),
-                           # Backward of `lgamma` uses `digamma` but `digamma`
-                           # is not implemented for `BFloat16`
-                           # Error Raised:
-                           #   RuntimeError: "digamma" not implemented for 'BFloat16'
-                           SkipInfo('TestCommon', 'test_variant_consistency_jit',
-                                    dtypes=[torch.bfloat16]),
                        ),
                        safe_casts_outputs=True),
         UnaryUfuncInfo('logit',

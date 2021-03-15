@@ -180,6 +180,11 @@ class TestGradients(TestCase):
 class TestCommon(JitCommonTestCase):
     exact_dtype = True
 
+    # variant testing is only done with torch.float to avoid excessive
+    #   test times and because many of the tests validate autograd
+    _variant_ops = partial(ops, dtypes=OpDTypes.supported,
+                           allowed_dtypes=[torch.float])
+
     # Compares variant's backward
     # NOTE: verifies it fails when the forward fails
     def check_variant_backward(self, input, forward_result, expected_grad, expected_exception):
@@ -202,7 +207,7 @@ class TestCommon(JitCommonTestCase):
     # Tests that the forward and backward passes of operations produce the
     #   same values for the cross-product of op variants (method, inplace)
     #   against eager's gold standard op function variant
-    @ops(op_db)
+    @_variant_ops(op_db)
     def test_variant_consistency_eager(self, device, dtype, op):
         test_backward = op.supports_autograd and (op.test_complex_grad or not dtype.is_complex)
         samples = op.sample_inputs(device, dtype, requires_grad=test_backward)
@@ -230,7 +235,7 @@ class TestCommon(JitCommonTestCase):
             expected_forward = op(*sample.input, *sample.args, **sample.kwargs)
 
             # Computes expected backward
-            # NOTE: backward may fail for some dtypes
+            # NOTE: backward may fail for some operators
             exception_during_backwards = False
             expected_grad = None
             try:
@@ -269,7 +274,7 @@ class TestCommon(JitCommonTestCase):
     #   same values for the cross-product of op variants (function, method, inplace)
     #   and runtimes (eager, traced, scripted).
     # TODO WARNING: inplace x {traced, scripted} not currently tested
-    @ops(op_db)
+    @_variant_ops(op_db)
     def test_variant_consistency_jit(self, device, dtype, op):
         test_backward = op.supports_autograd and (
             (dtype.is_complex and op.test_complex_grad) or
@@ -348,7 +353,7 @@ class TestCommon(JitCommonTestCase):
                         self.assertAutodiffNode(traced_fn.last_graph, op.assert_autodiffed, nonfusible_nodes, fusible_nodes)
                         self.assertAutodiffNode(script_fn.last_graph, op.assert_autodiffed, nonfusible_nodes, fusible_nodes)
 
-    @ops([op for op in op_db if op.aliases])
+    @_variant_ops([op for op in op_db if op.aliases])
     def test_jit_alias_remapping(self, device, dtype, op):
         samples = op.sample_inputs(device, dtype, requires_grad=True)
         if len(samples) == 0:
