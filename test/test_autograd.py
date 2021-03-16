@@ -4004,9 +4004,8 @@ class TestAutograd(TestCase):
         # runtime error while compute batched grad (print big error)
         with self.assertRaisesRegex(RuntimeError, 'gradcheck or gradgradcheck failed while testing batched gradient'):
             gradcheck(lambda x: x.to_dense(), (x,), check_sparse_nnz=True, check_batched_grad=True)
-        # TODO: fix and then uncomment
-        # self.assertFalse(gradcheck(lambda x: x.to_dense(), (x,), check_sparse_nnz=True, check_batched_grad=True,
-        #                            raise_exception=False))
+        self.assertFalse(gradcheck(lambda x: x.to_dense(), (x,), check_sparse_nnz=True, check_batched_grad=True,
+                                   raise_exception=False))
 
     def test_gradcheck_backward_mul_by_grad_output(self):
         # when grad_input is sparse and has incorrect sparse_dim/dense_dim
