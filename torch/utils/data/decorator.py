@@ -1,7 +1,13 @@
+import inspect
+from functools import wraps
 from typing import Any, Callable, Optional, Type, Union
 from torch.utils.data import IterDataPipe
+from torch.utils.data.typing import _DataPipeType
 
 
+######################################################
+# Functional API
+######################################################
 class functional_datapipe(object):
     name: str
 
@@ -22,6 +28,9 @@ class functional_datapipe(object):
         return cls
 
 
+######################################################
+# Determinism
+######################################################
 _determinism: bool = False
 
 
@@ -93,3 +102,27 @@ class non_deterministic(object):
                             "for this DataPipe if that is acceptable for your application"
                             .format(self.cls.__name__))  # type: ignore
         return self.cls(*args, **kwargs)  # type: ignore
+
+
+######################################################
+# typing
+######################################################
+def force_typing(f):
+    signature = inspect.signature(f)
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs)
+        for argument_name, value in bound.arguments.items():
+            if argument_name == 'self':
+                continue
+            if isinstance(value, IterDataPipe):
+                if not hasattr(value, 'type'):
+                    raise TypeError("Argument '{}' must have attribute 'type'".format(argument_name))
+                if not isinstance(value.type, _DataPipeType):
+                    raise TypeError("Type of argument '{}' must be _DataPipeType, but {} is found"
+                                    .format(argument_name, type(value.type)))
+
+        return f(*args, **kwargs)
+
+    return wrapper
