@@ -509,6 +509,9 @@ std::ostream& IValue::repr(
       return out << std::setprecision(std::numeric_limits<double>::max_digits10)
                  << d << std::setprecision(orig_prec);
     }
+    case IValue::Tag::ComplexDouble: {
+      return out << v.toComplexDouble();
+    }
     case IValue::Tag::Int:
       return out << v.toInt();
     case IValue::Tag::Bool:
